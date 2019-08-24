@@ -1,10 +1,15 @@
 #version 150 core
 
+//struct ComplexPlane
+
 // https://www.khronos.org/opengl/wiki/GLSL_Uniform#Uniform_management
 // Parameter for all invocations of the shader
 uniform int maxIterations;
-uniform float windowHight;
 uniform vec4 baseColor = vec4(1.0, 1.0, 1.0, 1.0);
+uniform uvec2 windowDimensions;
+// edges of the shown area.
+// vec4(min_re, min_im, max_re, max_im)
+uniform vec4 complexPlane;
 out vec4 color;
 
 /* The value in gl_FragCoord is the actual pixel position
@@ -13,7 +18,15 @@ out vec4 color;
  * x is going right).
  */
 void main() {
-    vec2 c = gl_FragCoord.xy / windowHight * 4.0 - 2.0;
+    // Calculate what complex number this pixel corresponds to
+    // https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)
+    vec2 min = complexPlane.xy;
+    vec2 max = complexPlane.zw;
+    vec2 span = max - min;
+    float pixelSize = span.x / windowDimensions.x;
+    vec2 c = (pixelSize * gl_FragCoord.xy) + min;
+
+    // iteration algorithm for mandelbrot set
     vec2 z = c;
     int iterationen = 0;
     while (iterationen < maxIterations && length(z) < 2.0) {
@@ -23,7 +36,7 @@ void main() {
 
     // Color calculation
     // Copied from my Java implementation of the mandelbrot set.
-    // Back then I made comments in German and I'm to lazy to translate them.
+    // Back then I made comments in German and I'm to lazy now to translate them.
 
 
     /**Die Farbe wird berechnet mit dem HSV-Farbkreis.<br></br>
@@ -59,10 +72,10 @@ void main() {
         /* iterationen ist nun zwischen runde/2 und runde.
          * Deshalb zuerst minus runde/2; dadurch ist es zwischen 0 und runde/2.
          * Und nur noch in den Bereich von 0 bis 1 bingen. */
-        //float fraction = (iterationen - (runde / 2)) / (runde / 2);
+        float fraction = (iterationen - (runde / 2)) / float(runde / 2);
         //fraction = (iterationen - runde / 4) / ((3*runde) / 4);
 
-        float fraction = float(iterationen) / float(runde);
+        //float fraction = float(iterationen) / float(runde);
 
         /** Die Farbe wird berechnet mit dem HSV-Farbkreis.
          *
