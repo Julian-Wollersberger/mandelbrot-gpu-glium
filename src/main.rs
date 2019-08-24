@@ -1,31 +1,36 @@
 #[macro_use]
 extern crate glium;
 
-mod coordinates;
+mod complex_plane;
 
 use glium::{DisplayBuild, Surface, Program, VertexBuffer};
 use glium::glutin::{Event, VirtualKeyCode, WindowBuilder};
 use glium::backend::glutin_backend::GlutinFacade;
 
-use crate::coordinates::ComplexPlane;
+use crate::complex_plane::ComplexPlane;
+use glium::backend::glutin_backend::glutin::ElementState;
 
 /// Tutorial from https://aimlesslygoingforward.com/blog/2016/09/27/mandelbrot-using-shaders-rust/
 fn main() {
     const WINDOW_SIZE: u32 = 1000;
-    
     let (display, program, vertex_buffer) = gl_setup(WINDOW_SIZE);
-    
     let mut max_iterations: i32 = 0;
+    let mut complex_plane = ComplexPlane::default();
+    
     loop {
+        let dim = display.get_framebuffer_dimensions();
+        let (fitted_plane, pixel_size) = complex_plane.fit_to_screen(dim.0, dim.1);
         // Parameter for shader
         let uniforms = uniform! {
-            maxIterations: max_iterations,
-            windowDimensions: display.get_framebuffer_dimensions(),
-            complexPlane: ComplexPlane::default(),
+            max_iterations: max_iterations,
+            complex_plane: fitted_plane,
+            pixel_size: pixel_size,
         };
-        max_iterations = (max_iterations + 1) % 50;
-        //max_iterations +=1;
-        //if max_iterations > 70 { max_iterations = 4 }
+        
+        // animation effect
+        //max_iterations = (max_iterations + 1) % 50;
+        max_iterations +=1;
+        if max_iterations > 70 { max_iterations = 4 }
         
         let mut target = display.draw();
         // Draw the vertices
@@ -42,6 +47,18 @@ fn main() {
                 Event::Closed => return,
                 // Quit on Esc:
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
+                
+                // Zoom in
+                Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Add)) => {
+                    complex_plane = complex_plane.zoom(0.8);
+                }
+                // Zoom out
+                Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Subtract)) => {
+                    complex_plane = complex_plane.zoom(1.25);
+                }
+                Event::KeyboardInput(state, _, Some(key)) => {
+                    println!("{:?} key {:?}", state, key);
+                },
                 _ => ()
             }
         }

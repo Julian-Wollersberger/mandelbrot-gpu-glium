@@ -4,12 +4,12 @@
 
 // https://www.khronos.org/opengl/wiki/GLSL_Uniform#Uniform_management
 // Parameter for all invocations of the shader
-uniform int maxIterations;
-uniform vec4 baseColor = vec4(1.0, 1.0, 1.0, 1.0);
-uniform uvec2 windowDimensions;
+uniform vec4 base_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform int max_iterations;
 // edges of the shown area.
 // vec4(min_re, min_im, max_re, max_im)
-uniform vec4 complexPlane;
+uniform vec4 complex_plane;
+uniform float pixel_size;
 out vec4 color;
 
 /* The value in gl_FragCoord is the actual pixel position
@@ -20,16 +20,13 @@ out vec4 color;
 void main() {
     // Calculate what complex number this pixel corresponds to
     // https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)
-    vec2 min = complexPlane.xy;
-    vec2 max = complexPlane.zw;
-    vec2 span = max - min;
-    float pixelSize = span.x / windowDimensions.x;
-    vec2 c = (pixelSize * gl_FragCoord.xy) + min;
+    vec2 min = complex_plane.xy;
+    vec2 c = (pixel_size * gl_FragCoord.xy) + min;
 
     // iteration algorithm for mandelbrot set
     vec2 z = c;
     int iterationen = 0;
-    while (iterationen < maxIterations && length(z) < 2.0) {
+    while (iterationen < max_iterations && length(z) < 2.0) {
         z = vec2(pow(z.x, 2) - pow(z.y, 2), 2 * z.x * z.y) + c;
         iterationen++;
     }
@@ -55,8 +52,8 @@ void main() {
      * @return Die Farbe als Int im argb-Format
      */
 
-    if (iterationen == maxIterations)
-        color = baseColor;
+    if (iterationen == max_iterations)
+        color = base_color;
     else {
         /* Exponentielles Verhalten. Der HSV-Farbkreis wird sozusagen
          * einmal rundumgegangen mit den ersten 15 Iterationen. Für die
@@ -94,13 +91,13 @@ void main() {
          *      0 == 0°, 1 == 360°
          */
         float hue = fraction;
-        if (hue < 0) color = baseColor;
+        if (hue < 0) color = base_color;
         else if (hue < 1.0 / 6.0) color = vec4(1.0, 0.0, hue * 6, 1.0);
         else if (hue < 2.0 / 6.0) color = vec4(1 - (hue - 1.0 / 6) * 6, 0.0, 1.0, 1.0);
         else if (hue < 3.0 / 6.0) color = vec4(0.0, (hue - 2.0 / 6) * 6, 1.0, 1.0);
         else if (hue < 4.0 / 6.0) color = vec4(0.0, 1.0, 1 - (hue - 3.0 / 6) * 6, 1.0);
         else if (hue < 5.0 / 6.0) color = vec4((hue - 4.0 / 6) * 6, 1.0, 0.0, 1.0);
         else if (hue <=6.0 / 6.0) color = vec4(1.0, 1 - (hue - 5.0 / 6) * 6, 0.0, 1.0);
-        else color = baseColor;
+        else color = base_color;
     }
 }
