@@ -13,10 +13,12 @@ implement_vertex!(Vertex, position);
 
 /// Tutorial from https://aimlesslygoingforward.com/blog/2016/09/27/mandelbrot-using-shaders-rust/
 fn main() {
+    const WINDOW_SIZE: u32 = 1000;
+    
     // Create the window
     let display = WindowBuilder::new()
         .with_title("Mandelbrot Set".to_string())
-        .with_dimensions(1024, 768)
+        .with_dimensions(WINDOW_SIZE, WINDOW_SIZE)
         .build_glium()
         .unwrap();
     
@@ -45,17 +47,20 @@ fn main() {
     let mut max_iterations: i32 = 0;
     loop {
         // Parameter for shader
-        let uniform = uniform! {
-            maxIterations: max_iterations
+        let uniforms = uniform! {
+            maxIterations: max_iterations,
+            windowHight: WINDOW_SIZE as f32
         };
-        max_iterations = (max_iterations + 1) % 20;
+        //max_iterations = (max_iterations + 1) % 50;
+        max_iterations +=1;
+        if max_iterations > 70 { max_iterations = 4 }
         
         let mut target = display.draw();
         // Draw the vertices
         target.draw(&vertex_buffer,
             &glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList),
             &program,
-            &uniform,
+            &uniforms,
             &Default::default()).unwrap();
         target.finish().unwrap();
         
