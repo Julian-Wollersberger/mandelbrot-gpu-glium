@@ -1,5 +1,8 @@
 #version 150 core
 
+// https://www.khronos.org/opengl/wiki/GLSL_Uniform#Uniform_management
+// Parameter for all invocations of the shader
+uniform int maxIterations;
 out vec4 color;
 
 /* The value in gl_FragCoord is the actual pixel position
@@ -11,7 +14,7 @@ void main() {
     vec2 c = gl_FragCoord.xy / 767.0 * 4.0 - 2.0;
     vec2 z = c;
     int i = 0;
-    while(i < 10 && length(z) < 2.0) {
+    while(i < maxIterations && length(z) < 2.0) {
         z = vec2(pow(z.x, 2) - pow(z.y, 2), 2 * z.x * z.y) + c;
         i++;
     }

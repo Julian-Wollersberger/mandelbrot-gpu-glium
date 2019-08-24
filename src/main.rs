@@ -30,25 +30,32 @@ fn main() {
     // Render 2 triangles covering the whole screen
     let vertices = [
         // Top-left corner
-        Vertex{ position: [-1.0,  1.0] },
-        Vertex{ position: [ 1.0,  1.0] },
-        Vertex{ position: [-1.0, -1.0] },
+        Vertex { position: [-1.0, 1.0] },
+        Vertex { position: [1.0, 1.0] },
+        Vertex { position: [-1.0, -1.0] },
         
         // Bottom-right corner
         Vertex { position: [-1.0, -1.0] },
-        Vertex { position: [ 1.0,  1.0] },
-        Vertex { position: [ 1.0, -1.0] },
+        Vertex { position: [1.0, 1.0] },
+        Vertex { position: [1.0, -1.0] },
     ];
     
     let vertex_buffer = glium::VertexBuffer::new(&display, &vertices).unwrap();
     
+    let mut max_iterations: i32 = 0;
     loop {
+        // Parameter for shader
+        let uniform = uniform! {
+            maxIterations: max_iterations
+        };
+        max_iterations = (max_iterations + 1) % 20;
+        
         let mut target = display.draw();
         // Draw the vertices
         target.draw(&vertex_buffer,
             &glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList),
             &program,
-            &uniform! {},
+            &uniform,
             &Default::default()).unwrap();
         target.finish().unwrap();
         
@@ -57,7 +64,7 @@ fn main() {
                 // the window has been closed by the user:
                 Event::Closed => return,
                 // Quit on Esc:
-                Event::KeyboardInput(_ , _, Some(VirtualKeyCode::Escape)) => return,
+                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
                 _ => ()
             }
         }
