@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"><meta charset="utf-8">
+<meta name="author" content="Tomas Sedovic">
+<link rel="author" href="https://aimlesslygoingforward.com/about/">
+<link rel="stylesheet" href="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/style.css">
+<link rel="stylesheet" href="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/pygments.css">
+<link rel="alternate" type="application/atom+xml" href="https://aimlesslygoingforward.com/blog/feed.xml">
+<link rel="shortcut icon" href="https://aimlesslygoingforward.com/favicon.ico?v=1">
+<link rel="home" href="https://aimlesslygoingforward.com/">
+<title>Using Shaders and Rust to Render the Mandelbrot Set — Aimlessly Going Forward</title>
+</head><body>
+  <header>
+    <h1>Aimlessly Going Forward</h1>
+    <p>blog by Tomas Sedovic</p>
+    <nav>
+      <ul class="nav navbar-nav">
+        
+          <li class="active"><a href="https://aimlesslygoingforward.com/blog/">Blog</a></li>
+        
+          <li><a href="https://aimlesslygoingforward.com/projects/">Projects</a></li>
+        
+          <li><a href="https://aimlesslygoingforward.com/about/">About</a></li>
+        
+          <li><a href="https://aimlesslygoingforward.com/blog/feed.xml">RSS</a></li>
+      </ul>
+    </nav>
+  </header>
+  <div class="page">
+    
+  
+  <div class="blog-post">
+  
+    <h1>Using Shaders and Rust to Render the Mandelbrot Set</h1>
+  
+  <p>I'm learning OpenGL to understand computer graphics and how things
+like libtcod and game engines in general work. This includes learning
+about shaders -- parallelised programs that run on the GPU.</p>
+<p>One of the shaders -- the <a href="https://en.wikipedia.org/wiki/Shader#Pixel_shaders">fragment shader</a> --
+basically runs for every pixel on the screen. It's used for showing
+textures, ligting and a bunch of other stuff.</p>
+<p>And so thinking about shaders, I've realised that the pixels in the
+<a href="https://en.wikipedia.org/wiki/Mandelbrot_set">Mandelbrot set</a> are calculated independently and so one
+should be able to write the whole thing in the fragment shader.</p>
+<p>This is going to be using <a href="https://www.rust-lang.org/">Rust</a> (1.11.0 which is what I have
+installed at the moment) and <a href="https://crates.io/crates/glium">Glium</a> because I find it nicer to
+use than raw OpenGL. Plus, the concepts are mostly the same and the
+shader code is identical.</p>
+<h2>The Set Up</h2>
+<p>Let's create a new project:</p>
+<div class="highlight"><pre><span></span>$ cargo new --bin benoît
+$ <span class="nb">cd</span> benoît/
+$ cargo run
+</pre></div>
+<p>(side note: looks like Rust &amp; Cargo are handling non-ASCII characters
+just fine)</p>
+<p>Add the Glium dependency to <code>Cargo.toml</code>:</p>
+<div class="highlight"><pre><span></span><span class="k">[dependencies]</span>
+<span class="na">glium</span> <span class="o">=</span> <span class="s">"0.15.0"</span>
+</pre></div>
+<p>Put this at the beginning of <code>src/main.rs</code>:</p>
+<div class="highlight"><pre><span></span><span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">glium</span><span class="p">;</span><span class="w"></span>
+</pre></div>
+<p>And run to make sure everything's fine:</p>
+<div class="highlight"><pre><span></span>$ cargo run
+</pre></div>
+<p>It should compile and run a small hello-world kind of program.</p>
+<h2>The Boilerplate</h2>
+<p>We need to type a bunch of code that loads and compiles our shaders,
+creates the OpenGL window, passes some vertices in (so we have
+something to show on the screen) and so on. This is not a Glium/OpenGL
+tutorial so the explanation will be brief.</p>
+<p>First, we'll create the vertex shader in <code>src/mandelbrot.glslv</code>:</p>
+<div class="highlight"><pre><span></span><span class="cp">#version 150 core</span>
+
+<span class="k">in</span> <span class="kt">vec2</span> <span class="n">position</span><span class="p">;</span>
+
+<span class="kt">void</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="nb">gl_Position</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+<p>Basically, OpenGL receives a ton of triangles. Each triangle is
+defined by three corners (vertices). The vertex shader is a program
+that runs for each vertex, does some processing on it and return the
+final position of the vertex in the range of <code>-1</code> to <code>1</code> (the screen
+boundary).</p>
+<p>This one just receives the vertex positions and passes them through
+unchanged.</p>
+<p>The fragment shader will be in <code>src/mandelbrot.glslf</code>:</p>
+<div class="highlight"><pre><span></span><span class="cp">#version 150 core</span>
+
+<span class="k">out</span> <span class="kt">vec4</span> <span class="n">color</span><span class="p">;</span>
+
+<span class="kt">void</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+<p>This is where we'll put all the actual coding. The shader runs for
+each pixel on the screen and outputs a colour that should be displayed
+on that point.</p>
+<p>The colour consists of four elements: the red, green and blue channels
+and the alpha channel for transparency. They're all in the range of
+<code>0</code> to <code>1</code>.</p>
+<p>For now, we return the same colour for every pixel.</p>
+<p>Now for the Rust/Glium code. Open <code>src/main.rs</code> and type this in:</p>
+<div class="highlight"><pre><span></span><span class="cp">#[macro_use]</span><span class="w"></span>
+<span class="k">extern</span><span class="w"> </span><span class="k">crate</span><span class="w"> </span><span class="n">glium</span><span class="p">;</span><span class="w"></span>
+
+<span class="k">use</span><span class="w"> </span><span class="n">glium</span>::<span class="p">{</span><span class="n">DisplayBuild</span><span class="p">,</span><span class="w"> </span><span class="n">Surface</span><span class="p">};</span><span class="w"></span>
+<span class="k">use</span><span class="w"> </span><span class="n">glium</span>::<span class="n">glutin</span>::<span class="p">{</span><span class="n">Event</span><span class="p">,</span><span class="w"> </span><span class="n">VirtualKeyCode</span><span class="p">,</span><span class="w"> </span><span class="n">WindowBuilder</span><span class="p">};</span><span class="w"></span>
+
+<span class="cp">#[derive(Copy, Clone)]</span><span class="w"></span>
+<span class="k">struct</span> <span class="nc">Vertex</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">position</span>: <span class="p">[</span><span class="kt">f32</span><span class="p">;</span><span class="w"> </span><span class="mi">2</span><span class="p">],</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+
+<span class="n">implement_vertex</span><span class="o">!</span><span class="p">(</span><span class="n">Vertex</span><span class="p">,</span><span class="w"> </span><span class="n">position</span><span class="p">);</span><span class="w"></span>
+
+<span class="k">fn</span> <span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="c1">// Create the window</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">display</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WindowBuilder</span>::<span class="n">new</span><span class="p">()</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">with_title</span><span class="p">(</span><span class="s">"Mandelbrot Set"</span><span class="p">.</span><span class="n">to_string</span><span class="p">())</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">with_dimensions</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="mi">768</span><span class="p">)</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">build_glium</span><span class="p">()</span><span class="w"></span>
+<span class="w">        </span><span class="p">.</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+
+<span class="w">    </span><span class="c1">// Compile the shaders</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">program</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glium</span>::<span class="n">Program</span>::<span class="n">from_source</span><span class="p">(</span><span class="w"></span>
+<span class="w">        </span><span class="o">&amp;</span><span class="n">display</span><span class="p">,</span><span class="w"></span>
+<span class="w">        </span><span class="n">include_str</span><span class="o">!</span><span class="p">(</span><span class="s">"mandelbrot.glslv"</span><span class="p">),</span><span class="w"></span>
+<span class="w">        </span><span class="n">include_str</span><span class="o">!</span><span class="p">(</span><span class="s">"mandelbrot.glslf"</span><span class="p">),</span><span class="w"></span>
+<span class="w">        </span><span class="nb">None</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+
+<span class="w">    </span><span class="c1">// Render 2 triangles covering the whole screen</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">vertices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w"></span>
+<span class="w">        </span><span class="c1">// Top-left corner</span>
+<span class="w">        </span><span class="n">Vertex</span><span class="p">{</span><span class="w"> </span><span class="n">position</span>: <span class="p">[</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span><span class="w">  </span><span class="mf">1.0</span><span class="p">]</span><span class="w"> </span><span class="p">},</span><span class="w"></span>
+<span class="w">        </span><span class="n">Vertex</span><span class="p">{</span><span class="w"> </span><span class="n">position</span>: <span class="p">[</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span><span class="w">  </span><span class="mf">1.0</span><span class="p">]</span><span class="w"> </span><span class="p">},</span><span class="w"></span>
+<span class="w">        </span><span class="n">Vertex</span><span class="p">{</span><span class="w"> </span><span class="n">position</span>: <span class="p">[</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">1.0</span><span class="p">]</span><span class="w"> </span><span class="p">},</span><span class="w"></span>
+
+<span class="w">        </span><span class="c1">// Bottom-right corner</span>
+<span class="w">        </span><span class="n">Vertex</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">position</span>: <span class="p">[</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">1.0</span><span class="p">]</span><span class="w"> </span><span class="p">},</span><span class="w"></span>
+<span class="w">        </span><span class="n">Vertex</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">position</span>: <span class="p">[</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span><span class="w">  </span><span class="mf">1.0</span><span class="p">]</span><span class="w"> </span><span class="p">},</span><span class="w"></span>
+<span class="w">        </span><span class="n">Vertex</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">position</span>: <span class="p">[</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mf">1.0</span><span class="p">]</span><span class="w"> </span><span class="p">},</span><span class="w"></span>
+<span class="w">    </span><span class="p">];</span><span class="w"></span>
+
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">vertex_buffer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">glium</span>::<span class="n">VertexBuffer</span>::<span class="n">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">display</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">vertices</span><span class="p">).</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+
+<span class="w">    </span><span class="k">loop</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">display</span><span class="p">.</span><span class="n">draw</span><span class="p">();</span><span class="w"></span>
+<span class="w">        </span><span class="c1">// Draw the vertices</span>
+<span class="w">        </span><span class="n">target</span><span class="p">.</span><span class="n">draw</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vertex_buffer</span><span class="p">,</span><span class="w"></span>
+<span class="w">                    </span><span class="o">&amp;</span><span class="n">glium</span>::<span class="n">index</span>::<span class="n">NoIndices</span><span class="p">(</span><span class="n">glium</span>::<span class="n">index</span>::<span class="n">PrimitiveType</span>::<span class="n">TrianglesList</span><span class="p">),</span><span class="w"></span>
+<span class="w">                    </span><span class="o">&amp;</span><span class="n">program</span><span class="p">,</span><span class="w"></span>
+<span class="w">                    </span><span class="o">&amp;</span><span class="n">uniform</span><span class="o">!</span><span class="w"> </span><span class="p">{},</span><span class="w"></span>
+<span class="w">                    </span><span class="o">&amp;</span><span class="nb">Default</span>::<span class="n">default</span><span class="p">()).</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+<span class="w">        </span><span class="n">target</span><span class="p">.</span><span class="n">finish</span><span class="p">().</span><span class="n">unwrap</span><span class="p">();</span><span class="w"></span>
+
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">display</span><span class="p">.</span><span class="n">poll_events</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">            </span><span class="k">match</span><span class="w"> </span><span class="n">event</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">                </span><span class="c1">// the window has been closed by the user:</span>
+<span class="w">                </span><span class="n">Event</span>::<span class="n">Closed</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="k">return</span><span class="p">,</span><span class="w"></span>
+<span class="w">                </span><span class="c1">// Quit on Esc:</span>
+<span class="w">                </span><span class="n">Event</span>::<span class="n">KeyboardInput</span><span class="p">(</span><span class="n">_</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">VirtualKeyCode</span>::<span class="n">Escape</span><span class="p">))</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="k">return</span><span class="p">,</span><span class="w"></span>
+<span class="w">                </span><span class="n">_</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">()</span><span class="w"></span>
+<span class="w">            </span><span class="p">}</span><span class="w"></span>
+<span class="w">        </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+<p>We need to add <code>#[macro_use]</code> to <code>extern crate glium</code>, because we'll
+be using a couple of macros glium exports: <code>implement_vertex</code> and <code>uniform</code>.</p>
+<p>Next, we define the <code>Vertex</code> struct. This represents the vertices
+(triangle corners) that will be passed to the vertex shader.</p>
+<p>The <code>implement_vertex</code> macro lets you specify which fields of the
+vertex struct are to be passed to the vertex shader.</p>
+<p>Next, we create the main window. We can set the window title, its size
+and a bunch of other things not shown here.</p>
+<p>Then we load the vertex and fragment shaders (<code>include_str</code> is a Rust
+macro that loads a file from disk and put its contents where it's
+called). We do this instead of having to maintain the shader code
+inside the <code>main.rs</code> as a string or having to load it when the program
+runs. This way, it's compiled in.</p>
+<p>We then define two triangles that will cover the entire screen. Both
+<code>x</code> and <code>y</code> coordinates go from <code>-1</code> to <code>1</code> where <code>0</code> is the centre of
+the screen, <code>y</code> goes up and <code>x</code> goes right (like in most mathematical
+graphs and unlike a lot of window or graphics tools).</p>
+<p>Each triangle has three corners so we have two sets of three vertices.
+For the top-left triangle: the top-left corner <code>-1, 1</code>, top-right: <code>1,
+1</code> and bottom-left: <code>-1, -1</code>.</p>
+<p>For the bottom-right triangle: the bottom-left corner: <code>-1, -1</code>,
+top-right <code>1, 1</code> and bottom-right <code>1, -1</code>.</p>
+<p>We use the <code>vertices</code> array to create a vertex buffer which will send
+the vertices to the video card. Normally, a game would send thousands
+or even millions of vertices to the card every frame.</p>
+<p>Next is the render/input loop where we tell glium to draw everything
+using everything. Glium expects the vertex buffer, programs, indices,
+uniforms and any draw parameters to pass all at once in a single
+function call. Raw OpenGL, has a separate call for each of these
+things and it's easy to mess up and get to weird states that way.</p>
+<p>And finally, we process the OS window events and quit when the user
+presses Escape or closes the window.</p>
+<p>Now running this should produce a window filled with lovely magenta.</p>
+<p>From now on, we will leave the Rust program and the vertex shader
+alone and will only work with the fragment shader.</p>
+<h2>The Theory</h2>
+<p>So we'll need to know how to calculate the Mandelbrot set. That is
+easy to remember, because it's in the chorus of everyone's favourite
+song about the fractal:</p>
+<p><a href="https://www.youtube.com/watch?v=iL2jYBJ2Qas">https://www.youtube.com/watch?v=iL2jYBJ2Qas</a></p>
+<p>(in case the video goes down, it's the song <a href="http://www.jonathancoulton.com/wiki/Mandelbrot_Set/Lyrics">Mandelbrot Set by Jonathan
+Coulton</a>)</p>
+<p>So, the Mandelbrot set consists of complex numbers. We will treat the
+centre of the screen to be <code>0</code> on the complex plane and say the top
+and bottom of the screen to be <code>1</code> and <code>-1</code>.</p>
+<p>For each pixel, we will find the complex number it corresponds to and
+then:</p>
+<ol>
+<li>Set <code>C</code> to this complex number</li>
+<li>Set <code>Z</code> to <code>0</code></li>
+<li>Calculate <code>Z = Z^2 + C</code> a set number of times (say a 100)</li>
+<li>Test whether the result's absolute value is less or equal to <code>2</code></li>
+</ol>
+<p>If it is, the point belongs to the Mandelbrot set, otherwise it doesn't.</p>
+<p>One thing to note that the more iterations we do, the more precise
+measurements we'll get. But that will also make it longer to compute.</p>
+<h2>The Pixels</h2>
+<p>So the fragment shader is a program that runs for every pixel on the
+screen. The first thing we need to figure out is how to get the pixel
+coordinates in the shader program.</p>
+<p>The shaders have a <a href="https://www.opengl.org/wiki/Built-in_Variable_(GLSL)">bunch of built-in variables</a>, and
+<code>gl_FragCoord</code> has what we need. It's a <code>vec4</code> which contains the
+pixel coordinates.</p>
+<p>So, to test that this works, let's replace the <code>color</code> line in
+<code>src/mandelbrot.glslf</code> with this:</p>
+<div class="highlight"><pre><span></span><span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="p">(</span><span class="n">mod</span><span class="p">(</span><span class="nb">gl_FragCoord</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span> <span class="o">/</span> <span class="mi">256</span><span class="p">),</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+</pre></div>
+<p>I.e. we return the same value as before, except for the green channel,
+which now takes the pixel's <code>y</code> coordinate into consideration.</p>
+<p>The value in <code>gl_FragCoord</code> is the actual pixel position (e.g. between
+<code>0</code> and <code>767</code> since our window has the height of <code>768</code>). The point of
+origin <code>(0, 0)</code> is the bottom-left corner (<code>y</code> is going up, <code>x</code> is
+going right).</p>
+<p>Since the colour values need to be between <code>0</code> and <code>1</code>, we need to
+convert them. Doing a <code>modulo 256</code> will move the values into the <code>0-255</code>
+range and dividing by <code>255</code> will turn it into a <code>0-1</code> range.</p>
+<p>Here's what you should get:</p>
+<p><img src="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/glfragcoords.png" alt="Colour varies by pixels' y position"></p>
+<p>So now all we need to do is replace that with a colour for the
+Mandelbrot set.</p>
+<p>Let's convert the coordinates first. The stuff from <code>gl_FragCoord</code>
+will be in <code>0-1023</code> for <code>x</code> and <code>0-767</code> for <code>y</code>. The Mandelbrot set is
+contained within <code>-2</code> to <code>2</code> on both axes. So we want to convert the
+pixel coordinates to that range.</p>
+<p>We could get <code>x</code> to the <code>0</code> to <code>1</code> range by dividing it by <code>1023</code> and <code>y</code> by
+dividing it by <code>767</code>, but that would mean our plane would be a bit
+squished -- because the distance of <code>1</code> would mean something else on <code>x</code>
+and on <code>y</code>. So let's divide both by the same number.</p>
+<p>If we divide both coordinates by <code>767</code>, it will get the <code>y</code> axis into
+the <code>0</code> to <code>1</code> interval. We can then multiply it by <code>4</code> to get it to
+the <code>0-4</code> range and finally subtracting <code>2</code> will get us <code>-2, 2</code>. Doing
+the same to <code>x</code> will just give us some extra space on the sides.</p>
+<p>Let's add this line to our shader:</p>
+<div class="highlight"><pre><span></span><span class="kt">vec2</span> <span class="n">c</span> <span class="o">=</span> <span class="nb">gl_FragCoord</span><span class="p">.</span><span class="n">xy</span> <span class="o">/</span> <span class="mf">767.0</span> <span class="o">*</span> <span class="mf">4.0</span> <span class="o">-</span> <span class="mf">2.0</span><span class="p">;</span>
+</pre></div>
+<p>The <code>xy</code> component of <code>gl_FragCoord</code> is a <code>vec2</code> containing the <code>x</code>
+and <code>y</code> positions. And the shader language supports vector operations
+nicely so we don't have to write this for <code>x</code> and <code>y</code> separately.
+Cool!</p>
+<p>Simplifying this <em>highly complex</em> mathematical formula is left as an
+exercise for the reader.</p>
+<p>Now this won't do anything just yet (we're not using our <code>c</code> variable
+anywhere) but running it should not result in an error. When glium
+compiles the shaders, it would crash with an error message if they
+failed to compile. So it's always good to run the program when you
+modify the shaders.</p>
+<p>NOTE: some of glium's errors only appear if you compile with the debug
+mode (i.e. without the <code>--release</code> flag)!</p>
+<p>Okay, so let's see whether that point is in the Mandelbrot set or not.
+The initial <code>z</code> should be set to <code>0</code>, but the first iteration will
+result in it being set to <code>c</code>, so let's just start there. Next we just
+square it, then add the position and do this several times. Finally,
+we check whether the point diverges or not.</p>
+<p>Unfortunately, glsl's vector operations don't work the same way as
+multiplying (or squaring in our case) complex operations do, so we'll
+have to calculate <code>z * z</code> manually:</p>
+<div class="highlight"><pre><span></span><span class="kt">vec2</span> <span class="n">z</span> <span class="o">=</span> <span class="n">c</span><span class="p">;</span>
+<span class="kt">float</span> <span class="n">i</span><span class="p">;</span>
+<span class="k">for</span><span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mo">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">9</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="kt">vec2</span><span class="p">(</span><span class="n">pow</span><span class="p">(</span><span class="n">z</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">pow</span><span class="p">(</span><span class="n">z</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">z</span><span class="p">.</span><span class="n">x</span> <span class="o">*</span> <span class="n">z</span><span class="p">.</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="n">c</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+<p>(I tried just multiplying the two <code>z</code> together, but produced nothing
+like the Mendelbrot set. In my defense, we did vectors and complex
+numbers it high school and that's been almost ten years ago)</p>
+<p>I've chosen 10 iterations at first so as not to choke our poor GPU but
+we'll crank it up later.</p>
+<p>To find out whether the point actually belongs to the set, we
+calculate its absolute value (which is equal to the corresponding
+vector's <code>length</code>). If it is equal to or lesser than <code>2</code>, it's in the
+set.</p>
+<p>We'll mark points in the set <code>black</code> and everything else <code>white</code> for
+now:</p>
+<div class="highlight"><pre><span></span><span class="k">if</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mf">2.0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+<p>So the full shader will look like tihs:</p>
+<div class="highlight"><pre><span></span><span class="cp">#version 150 core</span>
+
+<span class="k">out</span> <span class="kt">vec4</span> <span class="n">color</span><span class="p">;</span>
+
+<span class="kt">void</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="kt">vec2</span> <span class="n">c</span> <span class="o">=</span> <span class="nb">gl_FragCoord</span><span class="p">.</span><span class="n">xy</span> <span class="o">/</span> <span class="mf">767.0</span> <span class="o">*</span> <span class="mf">4.0</span> <span class="o">-</span> <span class="mf">2.0</span><span class="p">;</span>
+
+    <span class="kt">vec2</span> <span class="n">z</span> <span class="o">=</span> <span class="n">c</span><span class="p">;</span>
+    <span class="kt">float</span> <span class="n">i</span><span class="p">;</span>
+    <span class="k">for</span><span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mo">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">9</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="kt">vec2</span><span class="p">(</span><span class="n">pow</span><span class="p">(</span><span class="n">z</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">pow</span><span class="p">(</span><span class="n">z</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">z</span><span class="p">.</span><span class="n">x</span> <span class="o">*</span> <span class="n">z</span><span class="p">.</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="n">c</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">if</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mf">2.0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+<p>Now see the result with <code>cargo run</code>:</p>
+<p><img src="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/mandeltwigs.png" alt="Mandelbrot Set with only a few iterations"></p>
+<p>Whoa! I did not expect that to be honest. Thought it would be sort of
+rounder but it has these weird twigs sprouting out.</p>
+<p>Anyway, this definitely is the right shape, so lets set the iterations
+to a 100!</p>
+<p><img src="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/mandelbrot_bw.png" alt="Black-and-white Mandelbrot Set"></p>
+<p>There we go.</p>
+<h2>The Pretties</h2>
+<p>But all the fancy internet mandelbrots have more than 2 colours. What
+gives?</p>
+<p>The set itself is defined as the points that do not diverge. Those are
+all the <em>boooooring</em> black pixels in our picture. So what people do is
+colour the divergent points based on various criteria.</p>
+<p>Let's try something simple and just assign a greyscale value based on
+the number of iteration when the <code>z</code> point diverged.</p>
+<p>First, we'll take the maximum number of iterations out into a
+variable, and then we'll move the check for the divergence into the
+for loop:</p>
+<div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">max_iterations</span> <span class="o">=</span> <span class="mi">100</span><span class="p">;</span>
+<span class="kt">float</span> <span class="n">i</span><span class="p">;</span>
+<span class="k">for</span><span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mo">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">max_iterations</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="kt">vec2</span><span class="p">(</span><span class="n">pow</span><span class="p">(</span><span class="n">z</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="n">pow</span><span class="p">(</span><span class="n">z</span><span class="p">.</span><span class="n">y</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">z</span><span class="p">.</span><span class="n">x</span> <span class="o">*</span> <span class="n">z</span><span class="p">.</span><span class="n">y</span><span class="p">)</span> <span class="o">+</span> <span class="n">c</span><span class="p">;</span>
+    <span class="k">if</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">2.0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">break</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+<p>Now when the loop exists, we have the number of iterations stored in
+<code>i</code>. We change the <code>if</code> branch to this:</p>
+<div class="highlight"><pre><span></span><span class="k">if</span><span class="p">(</span><span class="n">i</span> <span class="o">==</span> <span class="n">max_iterations</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="kt">float</span> <span class="n">val</span> <span class="o">=</span> <span class="n">i</span> <span class="o">/</span> <span class="kt">float</span><span class="p">(</span><span class="n">max_iterations</span><span class="p">);</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+<p>The <code>i == max_iterations</code> condition will only be true when the <code>z</code> did
+not diverge (i.e. we went through the whole loop without an early
+<code>break</code>). In that case, we return <code>black</code> just like before.</p>
+<p>But if it <em>did diverge</em>, we'll convert <code>i</code> into the <code>(0, 1)</code> space and
+return that on the RGB channels.</p>
+<p>Here's the greyscale version:</p>
+<p><img src="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/mandelbrot_greyscale.png" alt="Mandelbrot Set in greyscale"></p>
+<p>This actually looks nice, but the song promised day-glo! Let's add
+some colours.</p>
+<p>I'd like to have a similar situation as with the greyscale version --
+we feed it a value from <code>0-1</code> based on the number of iterations it
+took to diverge and convert that to a colour.</p>
+<p>I can't think of a simple way to do that with RGB, but in the HSV
+colour space, the H stands for <strong>hue</strong> which means <strong>colour</strong>,
+basically. So let's specify our target colour in HSV and convert it to
+RGB.</p>
+<p>Here's an
+<a href="http://stackoverflow.com/a/17897228">HSV to RGB conversion function I found on the internet</a>:</p>
+<div class="highlight"><pre><span></span><span class="kt">vec3</span> <span class="n">hsv2rgb</span><span class="p">(</span><span class="kt">vec3</span> <span class="n">c</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">vec4</span> <span class="n">K</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span> <span class="o">/</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">);</span>
+    <span class="kt">vec3</span> <span class="n">p</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">fract</span><span class="p">(</span><span class="n">c</span><span class="p">.</span><span class="n">xxx</span> <span class="o">+</span> <span class="n">K</span><span class="p">.</span><span class="n">xyz</span><span class="p">)</span> <span class="o">*</span> <span class="mf">6.0</span> <span class="o">-</span> <span class="n">K</span><span class="p">.</span><span class="n">www</span><span class="p">);</span>
+    <span class="k">return</span> <span class="n">c</span><span class="p">.</span><span class="n">z</span> <span class="o">*</span> <span class="n">mix</span><span class="p">(</span><span class="n">K</span><span class="p">.</span><span class="n">xxx</span><span class="p">,</span> <span class="n">clamp</span><span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="n">K</span><span class="p">.</span><span class="n">xxx</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">c</span><span class="p">.</span><span class="n">y</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+<p>Now we we just pass the <code>val</code> in our <code>else</code> branch to that:</p>
+<div class="highlight"><pre><span></span><span class="n">color</span> <span class="o">=</span> <span class="kt">vec4</span><span class="p">(</span><span class="n">hsv2rgb</span><span class="p">(</span><span class="kt">vec3</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)),</span> <span class="mf">1.0</span><span class="p">);</span>
+</pre></div>
+<p>And we have a colourful fractal:</p>
+<p><img src="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/mandelbrot_colour.png" alt="Mandelbrot Set in colour"></p>
+<p>Now let's ramp up the iterations:</p>
+<div class="highlight"><pre><span></span><span class="kt">int</span> <span class="n">max_iterations</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">;</span>
+</pre></div>
+<p>To get the final result:</p>
+<p><img src="Using%20Shaders%20and%20Rust%20to%20Render%20the%20Mandelbrot%20Set%20%E2%80%94%20Aimlessly%20Going%20Forward-Dateien/mandelbrot_final.png" alt="Mandelbrot Set in colour with 1000 iterations"></p>
+<h2>In Closing</h2>
+<ol>
+<li><p>For a real Rust program, run it with <code>cargo run --release</code> and
+build with <code>cargo build --release</code>. I'm not sure how much it matters
+here since all the processing happens on the GPU anyway.</p>
+</li>
+<li><p>You can implement zoom by passing what the screen centre stands for
+(it's <code>(0, 0)</code> in our case but can be anything) and the zoom level as
+uniforms. (and you can read the keyboard and mouse events to do this
+in the window event loop).</p>
+</li>
+<li><p>The real coolness of fractals is when you zoom in. Note that since
+all this is a 32-bit floating point math, it will break down very
+quickly.</p>
+</li>
+<li><p>There are colour smoothing techniques as well as math tricks to
+reduce the computational complexity and of course big-number
+calculation schemes to get better results. How much of that is
+feasible in the fragment shader I have no idea.</p>
+</li>
+</ol>
+<p>But it's a really neat exercise that let me understand the fragment
+shader a bit more.</p>
+
+  <p class="meta">
+    Tomas Sedovic
+    on 27 September, 2016
+  </p>
+  </div>
+
+
+  </div>
+  <footer>
+    © Copyright 2015 by Tomas Sedovic.
+  </footer>
+
+</body></html>

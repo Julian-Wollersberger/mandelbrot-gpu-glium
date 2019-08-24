@@ -1,0 +1,133 @@
+@font-face {
+  font-family: 'Noto Serif';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Noto Serif'), local('NotoSerif'), url(noto-serif.ttf) format('truetype');
+}
+
+@font-face {
+  font-family: 'OxygenMono';
+  font-style: normal;
+  src: local('OxygenMono'), url(OxygenMono-Regular.ttf) format('truetype');
+}
+
+
+header {
+  font-family: "DejaVu Sans", "Bitstream Vera Sans", Geneva, Verdana, sans-serif;
+}
+
+header, footer, .page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 30px;
+}
+
+body {
+  font-family: 'Noto Serif', Georgia, serif;
+  margin: 50px 25px;
+  font-size: 20px;
+}
+
+code {
+  font-family: 'OxygenMono';
+  background: lightyellow;
+}
+
+.highlight {
+  font-family: 'OxygenMono';
+  background: lightyellow;
+}
+
+.highlight pre {
+  font-family: 'OxygenMono';
+}
+
+a {
+  color: #2764a5;
+}
+
+a:visited {
+  color: #7da3d4;
+}
+
+.navbar-nav a:visited {
+  color: #2764a5;
+}
+
+
+
+.page h1 {
+  font-family: "DejaVu Sans", "Bitstream Vera Sans", Geneva, Verdana, sans-serif;
+  font-weight: normal;
+}
+
+.page p {
+  line-height: 28px;
+}
+
+
+img {
+  max-width: 760px;
+}
+
+header h1 {
+  margin: 0;
+  font-weight: normal;
+  font-size: 42px;
+}
+
+header nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+header nav ul li {
+  display: inline;
+  margin: 0 8px 0 0;
+  padding: 0;
+}
+
+blockquote p {
+  font-style: italic;
+}
+
+blockquote p:before { content: "‌“"; }
+blockquote p:after { content: "‌”"; }
+
+blockquote a[rel="author"] {
+  margin-left: 1em;
+  text-decoration: none;
+  color: black;
+}
+
+blockquote a[rel="author"]:before { content: "— "; }
+blockquote a[rel="author"]:hover {
+  color: #FFD800;
+  background: #000000;
+}
+
+.meta {
+  text-align: right;
+  font-weight: bold;
+  color: #767676;
+}
+
+img {
+  display: block;
+  margin: auto;
+}
+
+/* Replace the horizontal line with three asterisks */
+hr {
+    border: none;
+}
+
+hr:before {
+    content: '***';
+    display: block;
+    text-align: center;
+    font-size: 1.1em;
+    letter-spacing: 0.2em;
+    font-family: OxygenMono;
+}

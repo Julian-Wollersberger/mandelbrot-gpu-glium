@@ -1,0 +1,11 @@
+[package]
+name = "mandelbrot_gpu_glium"
+version = "0.1.0"
+authors = ["Julian Wollersberger <24991778+Julian-Wollersberger@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+glium = "0.15.0"
+#glium = "0.25.1"
