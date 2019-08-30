@@ -2,7 +2,7 @@ use glium::uniforms::{UniformValue, AsUniformValue};
 
 /// Representation of the coordinate space of the mandelbrot set.
 /// Has upper and lower real and imaginary boundaries.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ComplexPlane {
     min_re: f32,
     min_im: f32,
@@ -34,33 +34,27 @@ impl ComplexPlane {
             width,
             .. self.clone() // rest is the same.
         };
-        let pixel_size = resized.pixel_size();
-        
-        let center_re = (self.min_re + self.max_re) / 2.0;
-        let center_im = (self.min_im + self.max_im) / 2.0;
-        // because how pixel_size is adjusted, one axis is adjusted and the other stays the same.
-        let radius_re = width as f32 * pixel_size / 2.0;
-        let radius_im = height as f32 * pixel_size / 2.0;
-        
-        let new_plane = ComplexPlane {
-            min_re: center_re - radius_re,
-            min_im: center_im - radius_im,
-            max_re: center_re + radius_re,
-            max_im: center_im + radius_im,
-            width,
-            height,
-        };
+        // math is the same as noop-zoom. pixel_size() does the magic.
+        let new_plane = resized.zoom(1.0);
+        let pixel_size = new_plane.pixel_size();
         
         (new_plane, pixel_size)
     }
     
-    //TODO propper calculation
     pub fn zoom(&self, factor: f32) -> ComplexPlane {
+        let pixel_size = factor * self.pixel_size();
+    
+        let center_re = (self.min_re + self.max_re) / 2.0;
+        let center_im = (self.min_im + self.max_im) / 2.0;
+        // because how pixel_size is adjusted, one axis is adjusted and the other stays the same.
+        let radius_re = self.width as f32 * pixel_size / 2.0;
+        let radius_im = self.height as f32 * pixel_size / 2.0;
+    
         ComplexPlane {
-            min_re: self.min_re * factor,
-            min_im: self.min_im * factor,
-            max_re: self.max_re * factor,
-            max_im: self.max_im * factor,
+            min_re: center_re - radius_re,
+            min_im: center_im - radius_im,
+            max_re: center_re + radius_re,
+            max_im: center_im + radius_im,
             width: self.width,
             height: self.height,
         }

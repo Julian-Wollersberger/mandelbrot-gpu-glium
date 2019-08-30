@@ -15,7 +15,7 @@ use glium::backend::glutin_backend::glutin::ElementState;
 fn main() {
     const WINDOW_SIZE: u32 = 1000;
     let (display, program, vertex_buffer) = gl_setup(WINDOW_SIZE);
-    let mut max_iterations: i32 = 0;
+    let mut max_iterations: i32 = 100;
     let mut complex_plane = ComplexPlane::default();
     
     loop {
@@ -30,8 +30,8 @@ fn main() {
         
         // animation effect
         //max_iterations = (max_iterations + 1) % 50;
-        max_iterations +=1;
-        if max_iterations > 70 { max_iterations = 4 }
+        //max_iterations +=1;
+        //if max_iterations > 70 { max_iterations = 4 }
         
         let mut target = display.draw();
         // Draw the vertices
@@ -47,11 +47,13 @@ fn main() {
                 // the window has been closed by the user:
                 Event::Closed => return,
                 // Quit on Esc:
-                Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
+                //Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
                 
-                //  Other keys
+                // Other keys
                 Event::KeyboardInput(ElementState::Pressed, _, Some(key)) => {
-                    complex_plane = match_input(&complex_plane, key);
+                    let new = match_input(key, &complex_plane, max_iterations);
+                    complex_plane = new.0;
+                    max_iterations = new.1;
                 }
                 Event::KeyboardInput(state, _, Some(key)) => {
                     println!("{:?} key {:?}", state, key);
@@ -62,8 +64,9 @@ fn main() {
     }
 }
 
-fn match_input(plane: &ComplexPlane, key: VirtualKeyCode) -> ComplexPlane {
-    match key {
+fn match_input(key: VirtualKeyCode, plane: &ComplexPlane, max_iterations: i32) -> (ComplexPlane, i32) {
+    // manipulate plane
+    let new_plane = match key {
         // Zoom in
         Add => plane.zoom(0.8),
         // Zoom out
@@ -73,7 +76,18 @@ fn match_input(plane: &ComplexPlane, key: VirtualKeyCode) -> ComplexPlane {
         Up => plane.move_down(-100.),
         Down => plane.move_down(100.),
         _ => plane.clone(),
-    }
+    };
+    // manipulate iterations
+    let new_max_iterations = match key {
+        // increase iterations
+        I => max_iterations * 2,
+        // decrease iterations, but minimum is 1.
+        D => i32::max(max_iterations / 2, 1),
+        _ => max_iterations,
+    };
+    
+    println!("iterations:{}, {:?}", new_max_iterations, &new_plane);
+    (new_plane, new_max_iterations)
 }
 
 #[derive(Copy, Clone)]
