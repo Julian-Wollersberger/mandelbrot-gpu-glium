@@ -5,6 +5,7 @@ mod complex_plane;
 
 use glium::{DisplayBuild, Surface, Program, VertexBuffer};
 use glium::glutin::{Event, VirtualKeyCode, WindowBuilder};
+use glium::glutin::VirtualKeyCode::*;
 use glium::backend::glutin_backend::GlutinFacade;
 
 use crate::complex_plane::ComplexPlane;
@@ -48,13 +49,9 @@ fn main() {
                 // Quit on Esc:
                 Event::KeyboardInput(_, _, Some(VirtualKeyCode::Escape)) => return,
                 
-                // Zoom in
-                Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Add)) => {
-                    complex_plane = complex_plane.zoom(0.8);
-                }
-                // Zoom out
-                Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Subtract)) => {
-                    complex_plane = complex_plane.zoom(1.25);
+                //  Other keys
+                Event::KeyboardInput(ElementState::Pressed, _, Some(key)) => {
+                    complex_plane = match_input(&complex_plane, key);
                 }
                 Event::KeyboardInput(state, _, Some(key)) => {
                     println!("{:?} key {:?}", state, key);
@@ -65,6 +62,19 @@ fn main() {
     }
 }
 
+fn match_input(plane: &ComplexPlane, key: VirtualKeyCode) -> ComplexPlane {
+    match key {
+        // Zoom in
+        Add => plane.zoom(0.8),
+        // Zoom out
+        Subtract => plane.zoom(1.25),
+        Left => plane.move_left(100.),
+        Right => plane.move_left(-100.),
+        Up => plane.move_down(-100.),
+        Down => plane.move_down(100.),
+        _ => plane.clone(),
+    }
+}
 
 #[derive(Copy, Clone)]
 struct Vertex {
