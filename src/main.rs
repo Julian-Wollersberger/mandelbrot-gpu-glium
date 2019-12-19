@@ -68,21 +68,22 @@ fn match_input(key: VirtualKeyCode, plane: &ComplexPlane, max_iterations: i32) -
     // manipulate plane
     let new_plane = match key {
         // Zoom in
-        Add => plane.zoom(0.8),
+        Add | F => plane.zoom(0.8),
         // Zoom out
-        Subtract => plane.zoom(1.25),
-        Left => plane.move_left(100.),
-        Right => plane.move_left(-100.),
-        Up => plane.move_down(-100.),
-        Down => plane.move_down(100.),
+        Subtract | Space => plane.zoom(1.25),
+        // Move
+        Left | A => plane.move_left(100.),
+        Right | D => plane.move_left(-100.),
+        Up | W => plane.move_down(-100.),
+        Down | S => plane.move_down(100.),
         _ => plane.clone(),
     };
     // manipulate iterations
     let new_max_iterations = match key {
         // increase iterations
-        I => max_iterations * 2,
-        // decrease iterations, but minimum is 1.
-        D => i32::max(max_iterations / 2, 1),
+        I | Q => max_iterations * 3 / 2,
+        // decrease iterations, but minimum is 2.
+        O | E => i32::max(max_iterations * 2 / 3, 2),
         _ => max_iterations,
     };
     
