@@ -64,15 +64,11 @@ void main() {
         while (iterationen >= runde) {
             // Bitmuster ist immer nur einsen, somit kein Problem mit MAX_INT >= runde.
             runde = runde * 2 + 1;
-            //runde = runde * 4 + 3
         }
         /* iterationen ist nun zwischen runde/2 und runde.
          * Deshalb zuerst minus runde/2; dadurch ist es zwischen 0 und runde/2.
          * Und nur noch in den Bereich von 0 bis 1 bingen. */
         float fraction = (iterationen - (runde / 2)) / float(runde / 2);
-        //fraction = (iterationen - runde / 4) / ((3*runde) / 4);
-
-        //float fraction = float(iterationen) / float(runde);
 
         /** Die Farbe wird berechnet mit dem HSV-Farbkreis.
          *
@@ -91,13 +87,13 @@ void main() {
          *      0 == 0°, 1 == 360°
          */
         float hue = fraction;
-        if (hue < 0) color = base_color;
-        else if (hue < 1.0 / 6.0) color = vec4(1.0, 0.0, hue * 6, 1.0);
-        else if (hue < 2.0 / 6.0) color = vec4(1 - (hue - 1.0 / 6) * 6, 0.0, 1.0, 1.0);
-        else if (hue < 3.0 / 6.0) color = vec4(0.0, (hue - 2.0 / 6) * 6, 1.0, 1.0);
-        else if (hue < 4.0 / 6.0) color = vec4(0.0, 1.0, 1 - (hue - 3.0 / 6) * 6, 1.0);
-        else if (hue < 5.0 / 6.0) color = vec4((hue - 4.0 / 6) * 6, 1.0, 0.0, 1.0);
-        else if (hue <=6.0 / 6.0) color = vec4(1.0, 1 - (hue - 5.0 / 6) * 6, 0.0, 1.0);
-        else color = base_color;
+        if (hue < 0) color = base_color; // shouldn't apply
+        else if (hue < 1.0 / 6.0) color = vec4(1.0,             0.0,             hue * 6,         1.0);
+        else if (hue < 2.0 / 6.0) color = vec4(1-(hue-1.0/6)*6, 0.0,             1.0,             1.0);
+        else if (hue < 3.0 / 6.0) color = vec4(0.0,             (hue-2.0/6)*6,   1.0,             1.0);
+        else if (hue < 4.0 / 6.0) color = vec4(0.0,             1.0,             1-(hue-3.0/6)*6, 1.0);
+        else if (hue < 5.0 / 6.0) color = vec4((hue-4.0/6)*6,   1.0,             0.0,             1.0);
+        else if (hue <=6.0 / 6.0) color = vec4(1.0,             1-(hue-5.0/6)*6, 0.0,             1.0);
+        else color = base_color; // shouldn't apply
     }
 }

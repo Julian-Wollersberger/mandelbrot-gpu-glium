@@ -17,7 +17,8 @@ impl ComplexPlane {
     
     // --- Math ---
     
-    /// Adjust the ratio to 1:1.
+    /// Computes how big one pixel is in the complex plane.
+    /// Adjust the aspect ratio to 1:1.
     fn pixel_size(&self) -> f32 {
         let pixel_width = (self.max_re - self.min_re) / self.width as f32;
         let pixel_height = (self.max_im - self.min_im) / self.height as f32;
@@ -41,14 +42,16 @@ impl ComplexPlane {
         (new_plane, pixel_size)
     }
     
+    /// Zooms in (`factor < 1.0`) or out (`factor > 1.0`).
+    /// The center point remains stationary.
     pub fn zoom(&self, factor: f32) -> ComplexPlane {
-        let pixel_size = factor * self.pixel_size();
+        let new_pixel_size = factor * self.pixel_size();
     
         let center_re = (self.min_re + self.max_re) / 2.0;
         let center_im = (self.min_im + self.max_im) / 2.0;
         // because how pixel_size is adjusted, one axis is adjusted and the other stays the same.
-        let radius_re = self.width as f32 * pixel_size / 2.0;
-        let radius_im = self.height as f32 * pixel_size / 2.0;
+        let radius_re = self.width as f32 * new_pixel_size / 2.0;
+        let radius_im = self.height as f32 * new_pixel_size / 2.0;
     
         ComplexPlane {
             min_re: center_re - radius_re,

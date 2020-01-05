@@ -18,10 +18,14 @@ fn main() {
     let mut max_iterations: i32 = 100;
     let mut complex_plane = ComplexPlane::default();
     
+    // Render loop
     loop {
         let dim = display.get_framebuffer_dimensions();
         let (fitted_plane, pixel_size) = complex_plane.fit_to_screen(dim.0, dim.1);
-        // Parameter for shader
+        
+        // These variables are passed
+        // into the shader's corresponding
+        // `uniform` variables.
         let uniforms = uniform! {
             max_iterations: max_iterations,
             complex_plane: fitted_plane,
@@ -39,7 +43,8 @@ fn main() {
             &glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList),
             &program,
             &uniforms,
-            &Default::default()).unwrap();
+            &Default::default()
+        ).unwrap();
         target.finish().unwrap();
         
         for event in display.poll_events() {
@@ -56,7 +61,7 @@ fn main() {
                     max_iterations = new.1;
                 }
                 Event::KeyboardInput(state, _, Some(key)) => {
-                    println!("{:?} key {:?}", state, key);
+                    eprintln!("{:?} key {:?}", state, key);
                 },
                 _ => ()
             }
@@ -69,6 +74,8 @@ fn match_input(key: VirtualKeyCode, plane: &ComplexPlane, max_iterations: i32) -
     let new_plane = match key {
         // Zoom in
         Add | F => plane.zoom(0.8),
+        // Zoom in very slowly
+        Z => plane.zoom(0.98),
         // Zoom out
         Subtract | Space => plane.zoom(1.25),
         // Move
@@ -87,7 +94,7 @@ fn match_input(key: VirtualKeyCode, plane: &ComplexPlane, max_iterations: i32) -
         _ => max_iterations,
     };
     
-    println!("iterations:{}, {:?}", new_max_iterations, &new_plane);
+    eprintln!("iterations:{}, {:?}", new_max_iterations, &new_plane);
     (new_plane, new_max_iterations)
 }
 
